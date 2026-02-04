@@ -1,0 +1,9 @@
+{
+    "name": "Espacio A-001",
+    "code": "A-001",
+    "status": "AVALIABLE",
+    "description": "Espacio de prueba",
+    "priority": 1,
+    "isReserved": false,
+    "zoneId": "REPLACE_WITH_ZONE_ID"
+}

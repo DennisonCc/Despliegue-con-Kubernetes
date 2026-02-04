@@ -1,0 +1,220 @@
+version: '3.8'
+
+services:
+  # Kong Database (PostgreSQL)
+  kong-database:
+    image: postgres:16-alpine
+    container_name: kong-database
+    environment:
+      POSTGRES_DB: kong
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: kong
+    ports:
+      - "5436:5432"
+    volumes:
+      - kong_data:/var/lib/postgresql/data
+    networks:
+      - parkin-network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "kong"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kong Bootstrap - Inicialización de la base de datos
+  kong-bootstrap:
+    image: kong:3.5
+    container_name: kong-bootstrap
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kong
+      KONG_PG_DATABASE: kong
+    command: kong migrations bootstrap
+    networks:
+      - parkin-network
+    depends_on:
+      kong-database:
+        condition: service_healthy
+    restart: on-failure
+
+  # Kong API Gateway
+  kong:
+    image: kong:3.5
+    container_name: kong-gateway
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kong
+      KONG_PG_DATABASE: kong
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_GUI_LISTEN: 'off'
+    ports:
+      - "9000:8000"  # Proxy HTTP
+      - "9001:8001"  # Admin API HTTP
+    networks:
+      - parkin-network
+    depends_on:
+      kong-database:
+        condition: service_healthy
+      kong-bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  # Database for mc-clientes
+  postgres-clientes:
+    image: postgres:16-alpine
+    container_name: parkin_users_db
+    environment:
+      POSTGRES_DB: db_parkin_users
+      POSTGRES_USER: parkin
+      POSTGRES_PASSWORD: qwerty123
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_users_data:/var/lib/postgresql/data
+    networks:
+      - parkin-network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "parkin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Database for zone_core
+  postgres-zone:
+    image: postgres:16-alpine
+    container_name: parkin_zone_db
+    environment:
+      POSTGRES_DB: db_parkin_zone
+      POSTGRES_USER: parkin
+      POSTGRES_PASSWORD: qwerty123
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_zone_data:/var/lib/postgresql/data
+    networks:
+      - parkin-network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "parkin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Database for ms-tickets
+  postgres-tickets:
+    image: postgres:16-alpine
+    container_name: parkin_tickets_db
+    environment:
+      POSTGRES_DB: db_parkin_tickets
+      POSTGRES_USER: parkin
+      POSTGRES_PASSWORD: qwerty123
+    ports:
+      - "5437:5432"
+    volumes:
+      - postgres_tickets_data:/var/lib/postgresql/data
+    networks:
+      - parkin-network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "parkin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Microservicio mc-clientes
+  mc-clientes:
+    build:
+      context: ./mc-clientes
+      dockerfile: Dockerfile
+    container_name: mc-clientes
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-clientes:5432/db_parkin_users
+      SPRING_DATASOURCE_USERNAME: parkin
+      SPRING_DATASOURCE_PASSWORD: qwerty123
+      SPRING_RABBITMQ_HOST: host.docker.internal
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+    ports:
+      - "8081:8081"
+    networks:
+      - parkin-network
+    depends_on:
+      postgres-clientes:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Microservicio zone_core
+  zone-core:
+    build:
+      context: ./zone_core
+      dockerfile: Dockerfile
+    container_name: zone-core
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-zone:5432/db_parkin_zone
+      SPRING_DATASOURCE_USERNAME: parkin
+      SPRING_DATASOURCE_PASSWORD: qwerty123
+      SPRING_RABBITMQ_HOST: host.docker.internal
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+    ports:
+      - "8080:8080"
+    networks:
+      - parkin-network
+    depends_on:
+      postgres-zone:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Microservicio ms-tickets
+  ms-tickets:
+    build:
+      context: ./ms-tickets
+      dockerfile: Dockerfile
+    container_name: ms-tickets
+    environment:
+      DB_HOST: postgres-tickets
+      DB_PORT: 5432
+      DB_USER: parkin
+      DB_PASSWORD: qwerty123
+      DB_NAME: db_parkin_tickets
+      PORT: 4000
+      RABBITMQ_HOST: host.docker.internal
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: admin
+      RABBITMQ_PASSWORD: admin
+      ZONE_SERVICE_URL: http://zone-core:8080/api
+      PERSONA_SERVICE_URL: http://mc-clientes:8081/api
+    ports:
+      - "4000:4000"
+    networks:
+      - parkin-network
+    depends_on:
+      postgres-tickets:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  parkin-network:
+    driver: bridge
+
+volumes:
+  kong_data:
+  postgres_users_data:
+  postgres_zone_data:
+  postgres_tickets_data:

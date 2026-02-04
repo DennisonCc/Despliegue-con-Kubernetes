@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zone-core
+  namespace: integration-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zone-core
+  template:
+    metadata:
+      labels:
+        app: zone-core
+    spec:
+      containers:
+      - name: zone-core
+        image: zone-core:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres-db:5432/db_parkin_zone"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "parkin"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "qwerty123"
+        - name: SPRING_RABBITMQ_HOST
+          value: "rabbitmq"
+        - name: SPRING_RABBITMQ_PORT
+          value: "5672"
+        - name: SPRING_RABBITMQ_USERNAME
+          value: "admin"
+        - name: SPRING_RABBITMQ_PASSWORD
+          value: "admin"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zone-core-svc
+  namespace: integration-ns
+spec:
+  selector:
+    app: zone-core
+  ports:
+    - port: 80
+      targetPort: 8080

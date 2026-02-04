@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mc-clientes
+  namespace: integration-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mc-clientes
+  template:
+    metadata:
+      labels:
+        app: mc-clientes
+    spec:
+      containers:
+      - name: mc-clientes
+        image: mc-clientes:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8081
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres-db:5432/db_parkin_users"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "parkin"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "qwerty123"
+        - name: SPRING_RABBITMQ_HOST
+          value: "rabbitmq"
+        - name: SPRING_RABBITMQ_PORT
+          value: "5672"
+        - name: SPRING_RABBITMQ_USERNAME
+          value: "admin"
+        - name: SPRING_RABBITMQ_PASSWORD
+          value: "admin"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mc-clientes-svc
+  namespace: integration-ns
+spec:
+  selector:
+    app: mc-clientes
+  ports:
+    - port: 80
+      targetPort: 8081

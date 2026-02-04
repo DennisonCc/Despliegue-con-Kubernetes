@@ -1,0 +1,8 @@
+export enum TicketEstado {
+    ACTIVO = 'ACTIVO',
+    FINALIZADO = 'FINALIZADO',
+    CANCELADO = 'CANCELADO',
+    PAGADO = 'PAGADO',
+    OCUPADO = 'OCUPADO',
+    DISPONIBLE = 'DISPONIBLE'
+}
